@@ -4,57 +4,34 @@ import { holidays } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 export interface Holiday {
-  date: string; // YYYY-MM-DD
+  date: string;
   name: string;
   isSubstitute: boolean;
 }
 
-async function fetchKoreaHolidays(year: number): Promise<Holiday[]> {
-  const apiKey = process.env.KOREA_DATA_GO_KR_API_KEY;
-  if (!apiKey || apiKey === "YOUR_DATA_GO_KR_ENCODING_KEY") {
-    throw new Error("KOREA_DATA_GO_KR_API_KEY not configured");
+async function fetchWithTimeout(url: string, ms = 8000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      next: { revalidate: 86400 },
+    });
+    clearTimeout(timeout);
+    return res;
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
   }
-
-  const results: Holiday[] = [];
-
-  for (let month = 1; month <= 12; month++) {
-    const solMonth = month.toString().padStart(2, "0");
-    const url = `http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?serviceKey=${encodeURIComponent(
-      apiKey
-    )}&solYear=${year}&solMonth=${solMonth}&_type=json`;
-
-    try {
-      const res = await fetch(url, { next: { revalidate: 86400 } });
-      const text = await res.text();
-      const data = await parseStringPromise(text, { explicitArray: false });
-      const items = data?.response?.body?.items?.item;
-
-      if (!items) continue;
-
-      const list = Array.isArray(items) ? items : [items];
-      for (const item of list) {
-        const locdate = item.locdate;
-        const dateName = item.dateName;
-        if (!locdate || !dateName) continue;
-
-        const dateStr = `${locdate.toString().slice(0, 4)}-${locdate
-          .toString()
-          .slice(4, 6)}-${locdate.toString().slice(6, 8)}`;
-
-        const isSubstitute = dateName.includes("대체") || dateName.includes("substitute");
-        results.push({ date: dateStr, name: dateName, isSubstitute });
-      }
-    } catch (err) {
-      console.error(`Failed to fetch Korea holidays for ${year}-${solMonth}:`, err);
-    }
-  }
-
-  return results;
 }
 
-async function fetchNagerHolidays(countryCode: string, year: number): Promise<Holiday[]> {
+// Nager.Date API - 연도별 한 번 호출, 묵집, 인증 불필요
+async function fetchNagerHolidays(
+  countryCode: string,
+  year: number
+): Promise<Holiday[]> {
   const url = `https://date.nager.at/api/v3/PublicHolidays/${year}/${countryCode}`;
-  const res = await fetch(url, { next: { revalidate: 86400 } });
+  const res = await fetchWithTimeout(url, 8000);
   if (!res.ok) throw new Error(`Nager API error: ${res.status}`);
 
   const data = (await res.json()) as Array<{
@@ -70,8 +47,54 @@ async function fetchNagerHolidays(countryCode: string, year: number): Promise<Ho
     isSubstitute:
       item.name.toLowerCase().includes("substitute") ||
       item.localName.toLowerCase().includes("대체") ||
-      item.types.includes("SubstituteHoliday"),
+      item.types?.includes("SubstituteHoliday"),
   }));
+}
+
+// 공공데이터포털 API - 월별 12회 병렬 호출
+async function fetchKoreaHolidays(year: number): Promise<Holiday[]> {
+  const apiKey = process.env.KOREA_DATA_GO_KR_API_KEY;
+  if (!apiKey || apiKey === "YOUR_DATA_GO_KR_ENCODING_KEY") {
+    throw new Error("KOREA_DATA_GO_KR_API_KEY not configured");
+  }
+
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  const results = await Promise.all(
+    months.map(async (month) => {
+      const solMonth = month.toString().padStart(2, "0");
+      const url = `http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?serviceKey=${encodeURIComponent(
+        apiKey
+      )}&solYear=${year}&solMonth=${solMonth}&_type=json`;
+
+      try {
+        const res = await fetchWithTimeout(url, 5000);
+        const text = await res.text();
+        const data = await parseStringPromise(text, { explicitArray: false });
+        const items = data?.response?.body?.items?.item;
+        if (!items) return [];
+        const list = Array.isArray(items) ? items : [items];
+        return list.map((item: any) => {
+          const locdate = item.locdate.toString();
+          return {
+            date: `${locdate.slice(0, 4)}-${locdate.slice(4, 6)}-${locdate.slice(
+              6,
+              8
+            )}`,
+            name: item.dateName,
+            isSubstitute:
+              item.dateName.includes("대체") ||
+              item.dateName.toLowerCase().includes("substitute"),
+          };
+        });
+      } catch (err) {
+        return [];
+      }
+    })
+  );
+
+  const merged = results.flat();
+  if (merged.length === 0) throw new Error("All Korea API requests failed");
+  return merged;
 }
 
 export async function fetchAndCacheHolidays(
@@ -96,28 +119,36 @@ export async function fetchAndCacheHolidays(
     }));
   }
 
-  let fetched: Holiday[];
+  let fetched: Holiday[] = [];
 
-  if (countryCode === "KR") {
+  // 1. Nager API 먼저 시도 (빠르고 안정적)
+  try {
+    fetched = await fetchNagerHolidays(countryCode, year);
+  } catch (err) {
+    console.warn("Nager API failed:", err);
+  }
+
+  // 2. Nager가 실패하거나 비어있으면 공공데이터 API 시도
+  if (fetched.length === 0 && countryCode === "KR") {
     try {
       fetched = await fetchKoreaHolidays(year);
     } catch (err) {
-      console.warn("Korea API failed, falling back to Nager:", err);
-      fetched = await fetchNagerHolidays(countryCode, year);
+      console.warn("Korea API failed:", err);
     }
-  } else {
-    fetched = await fetchNagerHolidays(countryCode, year);
   }
 
   if (fetched.length > 0) {
-    await db.insert(holidays).values(
-      fetched.map((h) => ({
-        countryCode,
-        date: h.date,
-        name: h.name,
-        isSubstitute: h.isSubstitute,
-      }))
-    ).onConflictDoNothing();
+    await db
+      .insert(holidays)
+      .values(
+        fetched.map((h) => ({
+          countryCode,
+          date: h.date,
+          name: h.name,
+          isSubstitute: h.isSubstitute,
+        }))
+      )
+      .onConflictDoNothing();
   }
 
   return fetched;

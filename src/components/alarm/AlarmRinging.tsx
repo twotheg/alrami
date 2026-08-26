@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, BellRing, Moon, Sun } from "lucide-react";
+import { BellRing, Moon, Sun, VolumeX } from "lucide-react";
 import type { Alarm } from "@/lib/alarm/types";
 import { playSound, stopAll } from "@/lib/alarm/sound";
 
@@ -12,10 +12,20 @@ interface Props {
 
 export default function AlarmRinging({ alarm, onDismiss }: Props) {
   const [visible, setVisible] = useState(false);
+  const [mediaMuted, setMediaMuted] = useState(false);
 
   useEffect(() => {
     setVisible(true);
+
+    // 볼륨 테스트: 아주 짧은 소리로 미디어 볼륨이 0인지 확인
+    const testAudio = new Audio();
+    testAudio.volume = 0.01;
+    testAudio.play().catch(() => {
+      setMediaMuted(true);
+    });
+
     playSound(alarm.sound);
+
     if (alarm.vibrate && "vibrate" in navigator) {
       try {
         navigator.vibrate?.([500, 200, 500, 200, 1000]);
@@ -43,6 +53,13 @@ export default function AlarmRinging({ alarm, onDismiss }: Props) {
         <p className="text-base opacity-70">
           좋은 아침이에요! 알람이 울리고 있습니다 🔔
         </p>
+
+        {mediaMuted && (
+          <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-white/20 rounded-full text-sm">
+            <VolumeX className="w-4 h-4" />
+            <span>미디어 볼륨을 확인하세요</span>
+          </div>
+        )}
       </div>
 
       <div className="px-6 pb-10 space-y-3">

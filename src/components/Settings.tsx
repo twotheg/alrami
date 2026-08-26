@@ -1,8 +1,9 @@
 "use client";
 
-import { Bell, Globe, Moon, Volume2, Info, Shield, BellOff } from "lucide-react";
+import { Bell, Volume2, Info, Shield, BellOff } from "lucide-react";
 import PushManager from "./PushManager";
 import { useLocalStorage } from "@/lib/hooks";
+import { setAlarmVolume } from "@/lib/alarm/sound";
 
 interface Props {
   userId: string;
@@ -17,6 +18,15 @@ export default function Settings({ userId }: Props) {
     "alrami-vibrate",
     true
   );
+  const [alarmVolume, setAlarmVolumeState] = useLocalStorage<number>(
+    "alrami-alarm-volume",
+    0.8
+  );
+
+  const handleVolumeChange = (value: number) => {
+    setAlarmVolumeState(value);
+    setAlarmVolume(value);
+  };
 
   return (
     <div className="p-5 space-y-4">
@@ -29,14 +39,39 @@ export default function Settings({ userId }: Props) {
         <h2 className="font-bold text-slate-800 mb-3">알람 기본 설정</h2>
         <div className="divide-y divide-slate-100">
           <ToggleRow
-            icon={<Volume2 className="w-5 h-5 text-blue-600" />}
+            icon={<Volume2 className="w-5 h-5 text-[#FF7A59]" />}
             title="소리"
-            subtitle="벨소리가 울립니다"
+            subtitle="Web Audio로 벨소리가 울립니다"
             checked={soundEnabled}
             onChange={setSoundEnabled}
           />
+          <div className="py-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-slate-50 rounded-full">
+                  <Volume2 className="w-5 h-5 text-[#FF7A59]" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm text-slate-800">알람 소리 크기</p>
+                  <p className="text-xs text-slate-500">미디어 볼륨에 영향을 받아요</p>
+                </div>
+              </div>
+              <span className="text-sm font-semibold text-slate-700">
+                {Math.round(alarmVolume * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={alarmVolume}
+              onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#FF7A59]"
+            />
+          </div>
           <ToggleRow
-            icon={<Moon className="w-5 h-5 text-indigo-600" />}
+            icon={<Bell className="w-5 h-5 text-[#FF7A59]" />}
             title="진동"
             subtitle="알람이 울릴 때 진동이 함께 옵니다"
             checked={vibrateEnabled}
@@ -47,7 +82,7 @@ export default function Settings({ userId }: Props) {
 
       <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100 space-y-4">
         <h2 className="font-bold text-slate-800 flex items-center gap-2">
-          <Info className="w-5 h-5 text-blue-600" />
+          <Info className="w-5 h-5 text-[#FF7A59]" />
           앱 소개 & 사용 방법
         </h2>
         <div className="space-y-4 text-sm text-slate-600 leading-relaxed">
@@ -64,19 +99,19 @@ export default function Settings({ userId }: Props) {
           <section>
             <h3 className="font-semibold text-slate-800 mb-1">🔔 알람이 울리지 않을 수도 있어요</h3>
             <p className="text-xs">
-              iPhone Safari PWA는 앱이 오랫동안 종료된 상태이면 백그라운드 동작이
+              iPhone/Android PWA는 앱이 오랫동안 종료된 상태이면 백그라운드 동작이
               제한됩니다. 하지만 매일 저녁 7시에 오는 푸시 알림을 탭해 앱을 열어두면,
               다음 날 아침 정확한 시간에 알람이 울려요.
             </p>
-            <div className="mt-2 rounded-xl bg-blue-50 p-2.5 text-xs text-blue-800">
+            <div className="mt-2 rounded-xl bg-[#FFF4F0] p-2.5 text-xs text-[#FF7A59]">
               <strong className="flex items-center gap-1">
                 <Shield className="w-3.5 h-3.5" /> 해결 방법
               </strong>
               <ul className="list-disc list-inside mt-1 space-y-0.5">
                 <li>잠들기 전 앱을 완전히 닫지 말고 열어두세요.</li>
                 <li>푸시 알림을 탭하면 앱이 깨어납니다.</li>
-                <li>「설정 → Safari → 고급 → JavaScript」 켜짐 확인</li>
-                <li>저전력 모드는 알림 지연의 원인이 될 수 있어요.</li>
+                <li>미디어 볼륨이 0이면 벨소리가 들리지 않습니다.</li>
+                <li>알림 권한을 허용하면 시스템 알림음도 함께 옵니다.</li>
               </ul>
             </div>
           </section>
@@ -96,7 +131,7 @@ export default function Settings({ userId }: Props) {
               기본 알람 vs 알라미
             </h3>
             <p className="text-xs">
-              알라미는 휴일 스킵과 개인 휴일 연동이 핵심이에요. 기본 아이폰 알람을
+              알라미는 휴일 스킵과 개인 휴일 연동이 핵심이에요. 기본 휴일 알람을
               끄고 알라미만 사용하시면 휴일마다 일일이 알람을 끄지 않아도 돼요.
             </p>
           </section>
@@ -106,10 +141,10 @@ export default function Settings({ userId }: Props) {
       <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-100">
         <h2 className="font-bold text-slate-800 mb-2">배포 정보</h2>
         <div className="space-y-2 text-xs text-slate-600">
-          <InfoRow label="버전" value="1.0.0" />
+          <InfoRow label="버전" value="1.1.0" />
           <InfoRow label="호스팅" value="Vercel" />
           <InfoRow label="데이터베이스" value="Neon Postgres" />
-          <InfoRow label="공휴일 데이터" value="공공데이터포털 + Nager.Date" />
+          <InfoRow label="공휴일 데이터" value="Nager.Date + 공공데이터포털" />
         </div>
       </div>
 
@@ -146,7 +181,7 @@ function ToggleRow({
         onChange={(e) => onChange(e.target.checked)}
         className="sr-only peer"
       />
-      <div className="relative w-12 h-7 bg-slate-300 peer-checked:bg-green-500 rounded-full transition-colors">
+      <div className="relative w-12 h-7 bg-slate-300 peer-checked:bg-[#FF7A59] rounded-full transition-colors">
         <div
           className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${
             checked ? "translate-x-5" : ""

@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Alarm } from "./types";
 import { getNextTrigger, toDateStr } from "./scheduler";
+import { getAlarmVolume } from "./sound";
 
-const STORAGE_KEY = "alarm-off-alarms";
+const STORAGE_KEY = "alrami-alarms";
 
-// 전역 스킵 날짜 Set (홈 탭에서 공휴일/내휴일을 받아 설정)
+// 전역 스킵 날짜 Set (홈 탭에서 주입)
 let globalSkipDates = new Set<string>();
 
 export function setGlobalSkipDates(dates: string[]) {
@@ -66,7 +67,6 @@ export function useAlarms() {
           setFiring(fireAgain);
         }, 5 * 60 * 1000);
       } else {
-        // 한 번만 울리는 알람은 종료 처리
         setAlarms((prev) =>
           prev.map((a) =>
             a.id === firing.id
@@ -93,22 +93,18 @@ export function useAlarms() {
 
       for (const alarm of alarms) {
         if (!alarm.enabled) continue;
-
-        // 스킵할 날짜인지 확인
-        if (alarm.skipHolidays && globalSkipDates.has(todayStr)) {
-          continue;
-        }
+        if (alarm.skipHolidays && globalSkipDates.has(todayStr)) continue;
 
         const next = getNextTrigger(alarm, new Date(now.getTime() - 60_000));
         if (!next) continue;
 
         const diff = next.getTime() - now.getTime();
-          if (diff >= 0 && diff < 1000) {
+        if (diff >= 0 && diff < 1000) {
           const todayKey = `${alarm.id}:${todayStr}`;
           if (firedTodayKeyRef.current.has(todayKey)) continue;
           firedTodayKeyRef.current.add(todayKey);
 
-          // 시스템 알림도 함께 띄우기 (포그라운드에서도 알림)
+          // 시스템 Notification 발송 (알림 볼륨 사용)
           if (typeof window !== "undefined" && "Notification" in window) {
             if (Notification.permission === "granted") {
               try {
