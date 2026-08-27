@@ -37,10 +37,10 @@ export async function POST(request: NextRequest) {
       .onConflictDoNothing()
       .returning();
 
-    return NextResponse.json({ holiday: result[0] || null });
-  } catch (error) {
+    return NextResponse.json({ success: true, holiday: result[0] || null });
+  } catch (error: any) {
     console.error("Add user holiday error:", error);
-    return NextResponse.json({ error: "Failed to add holiday" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || "Failed to add holiday" }, { status: 500 });
   }
 }
 
