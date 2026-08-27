@@ -61,8 +61,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!userId && typeof window !== "undefined") {
-      setUserId(crypto.randomUUID());
+    if (typeof window === "undefined") return;
+    if (userId) return;
+
+    const existing = localStorage.getItem("alrami-user-id");
+    if (existing) {
+      setUserId(existing);
+    } else {
+      const newId = crypto.randomUUID();
+      localStorage.setItem("alrami-user-id", newId);
+      setUserId(newId);
     }
   }, [userId, setUserId]);
 
