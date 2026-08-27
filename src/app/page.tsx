@@ -113,9 +113,12 @@ export default function Home() {
   };
 
   const handleSaveHoliday = async (note: string) => {
-    if (!userId || !selectedDate) return;
+    if (!userId || !selectedDate) {
+      setMessage("사용자 ID가 없습니다. 다시 시도해주세요.");
+      return;
+    }
     try {
-      await fetch("/api/user/holidays", {
+      const res = await fetch("/api/user/holidays", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -125,18 +128,21 @@ export default function Home() {
           note,
         }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "저장 실패");
       await fetchUserHolidays();
-      setMessage("내 휴일로 추가했어요.");
+      setMessage("✅ 서버에 저장되었습니다.");
       setTimeout(() => setMessage(null), 2000);
-    } catch (err) {
-      setMessage("추가 중 오류가 발생했습니다.");
+    } catch (err: any) {
+      setMessage(`❌ 저장 실패: ${err.message}`);
+      console.error("Save holiday error:", err);
     }
   };
 
   const handleDeleteHoliday = async () => {
     if (!userId || !selectedDate) return;
     try {
-      await fetch("/api/user/holidays", {
+      const res = await fetch("/api/user/holidays", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -145,11 +151,14 @@ export default function Home() {
           date: selectedDate,
         }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "삭제 실패");
       await fetchUserHolidays();
-      setMessage("내 휴일을 제거했어요.");
+      setMessage("✅ 제거되었습니다.");
       setTimeout(() => setMessage(null), 2000);
-    } catch (err) {
-      setMessage("삭제 중 오류가 발생했습니다.");
+    } catch (err: any) {
+      setMessage(`❌ 삭제 실패: ${err.message}`);
+      console.error("Delete holiday error:", err);
     }
   };
 
