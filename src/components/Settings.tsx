@@ -35,6 +35,18 @@ export default function Settings({ userId }: Props) {
         <PushManager userId={userId} />
       </div>
 
+   <div className="rounded-3xl bg-white p-4 shadow-sm border border-slate-100">
+        <h2 className="font-bold text-slate-800 mb-2">내 ID</h2>
+        <p className="text-xs text-slate-500 mb-2">
+          데이터가 사라지면 이 ID로 복구할 수 있어요
+        </p>
+        <div className="bg-slate-100 p-3 rounded-xl">
+          <code className="text-xs break-all text-slate-700">
+            {userId || "생성 중..."}
+          </code>
+        </div>
+      </div>   
+      
       <div className="rounded-3xl bg-white p-4 shadow-sm border border-slate-100">
         <h2 className="font-bold text-slate-800 mb-3">알람 기본 설정</h2>
         <div className="divide-y divide-slate-100">
